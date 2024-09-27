@@ -687,6 +687,57 @@ MNV4ConvSmall_BLOCK_SPECS = {
     ],
 }
 
+"""
+Gobi version
+"""
+MobileNetGobi_BLOCK_SPECS = {
+    'spec_name': 'MobileNetGobi',
+    'block_spec_schema': [
+        'block_fn',
+        'activation',
+        'kernel_size',
+        'start_dw_kernel_size',
+        'middle_dw_kernel_size',
+        'middle_dw_downsample',
+        'strides',
+        'filters',
+        'expand_ratio',
+        'is_output',
+    ],
+    'block_specs': [
+        # 28px after stride 2.
+        ('convbn', 'relu', 3, None, None, False, 2, 32, None, False),
+        ('convbn', 'relu', 1, None, None, False, 1, 64, None, True),
+        # 14px.
+        ('uib', 'relu', None, 5, 5, True, 2, 96, 3.0, False),  # ExtraDW
+        ('uib', 'relu', None, 0, 3, True, 1, 96, 2.0, False),  # IB
+        ('uib', 'relu', None, 0, 3, True, 1, 96, 2.0, False),  # IB
+        ('uib', 'relu', None, 0, 3, True, 1, 96, 2.0, False),  # IB
+        ('uib', 'relu', None, 0, 3, True, 1, 96, 2.0, False),  # IB
+        ('uib', 'relu', None, 3, 0, True, 1, 96, 4.0, True),  # ConvNext
+        # 7px
+        ('uib', 'relu', None, 3, 3, True, 2, 128, 6.0, False),  # ExtraDW
+        ('uib', 'relu', None, 5, 5, True, 1, 128, 4.0, False),  # ExtraDW
+        ('uib', 'relu', None, 0, 5, True, 1, 128, 4.0, False),  # IB
+        ('uib', 'relu', None, 0, 5, True, 1, 128, 3.0, False),  # IB
+        ('uib', 'relu', None, 0, 3, True, 1, 128, 4.0, False),  # IB
+        ('uib', 'relu', None, 0, 3, True, 1, 128, 4.0, True),  # IB
+        ('convbn', 'relu', 1, None, None, False, 1, 960, None, False),  # Conv
+        (
+            'gpooling',
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            False,
+        ),  # Avg
+        ('convbn', 'relu', 1, None, None, False, 1, 80, None, False),  # Conv
+    ],
+}
 
 def _mnv4_conv_medium_block_specs():
   """Medium-sized MobileNetV4 using only convolutional operations."""
@@ -1149,6 +1200,7 @@ SUPPORTED_SPECS_MAP = {
     'MobileNetV4HybridMedium': _mnv4_hybrid_medium_block_specs(),
     'MobileNetV4HybridLarge': _mnv4_hybrid_large_block_specs(),
     'MobileNetV4ConvMediumSeg': _mnv4_conv_medium_seg_block_specs(),
+    'MobileNetGobi': MobileNetGobi_BLOCK_SPECS,
 }
 
 
