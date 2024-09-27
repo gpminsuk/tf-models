@@ -68,7 +68,7 @@ class MobileNetFeatureExtractor(tf.keras.layers.Layer):
 
 # Building the model
 def create_model():
-    inputs = tf_keras.Input(shape=(img_size, img_size, 3), batch_size=1)
+    inputs = tf_keras.Input(shape=(img_size, img_size, 3), batch_size=batch_size)
     x = PatchExtractor(patch_size)(inputs)
     x = tf.keras.layers.TimeDistributed(MobileNetFeatureExtractor())(x)
     x = tf.squeeze(x, axis=[2, 3])
@@ -79,55 +79,56 @@ def create_model():
 
 
 def train():
-    model = create_model()
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        model = create_model()
 
-    model.compile(
-        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
-    )
+        model.compile(
+            optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+        )
+        # Load training dataset
+        train_dataset = tf.keras.preprocessing.image_dataset_from_directory(
+            train_dir,
+            image_size=(img_size, img_size),
+            batch_size=batch_size,
+            label_mode="int",
+            shuffle=True,
+        )
 
-    # Load training dataset
-    train_dataset = tf.keras.preprocessing.image_dataset_from_directory(
-        train_dir,
-        image_size=(img_size, img_size),
-        batch_size=batch_size,
-        label_mode="int",
-        shuffle=True,
-    )
+        # Load valing dataset
+        val_dataset = tf.keras.preprocessing.image_dataset_from_directory(
+            val_dir,
+            image_size=(img_size, img_size),
+            batch_size=batch_size,
+            label_mode="int",
+            shuffle=False,
+        )
 
-    # Load valing dataset
-    val_dataset = tf.keras.preprocessing.image_dataset_from_directory(
-        val_dir,
-        image_size=(img_size, img_size),
-        batch_size=batch_size,
-        label_mode="int",
-        shuffle=False,
-    )
+        normalization_layer = tf.keras.layers.Rescaling(1.0 / 255)
+        train_dataset = train_dataset.map(lambda x, y: (normalization_layer(x), y)).prefetch(buffer_size=tf.data.AUTOTUNE)
+        val_dataset = val_dataset.map(lambda x, y: (normalization_layer(x), y)).prefetch(buffer_size=tf.data.AUTOTUNE)
 
-    normalization_layer = tf.keras.layers.Rescaling(1.0 / 255)
-    train_dataset = train_dataset.map(lambda x, y: (normalization_layer(x), y)).prefetch(buffer_size=tf.data.AUTOTUNE)
-    val_dataset = val_dataset.map(lambda x, y: (normalization_layer(x), y)).prefetch(buffer_size=tf.data.AUTOTUNE)
+        checkpoint_path = "./checkpoints/model_epoch_{epoch:02d}_val_acc_{val_accuracy:.2f}.keras"
+        checkpoint_callback = tf_keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint_path,
+            save_weights_only=False,
+            monitor="val_accuracy",
+            mode="max",
+            save_best_only=True,
+            verbose=1,
+        )
 
-    checkpoint_path = "./checkpoints/model_epoch_{epoch:02d}_val_acc_{val_accuracy:.2f}.keras"
-    checkpoint_callback = tf_keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path,
-        save_weights_only=False,
-        monitor="val_accuracy",
-        mode="max",
-        save_best_only=True,
-        verbose=1,
-    )
+        model.fit(
+            train_dataset,
+            epochs=10,
+            validation_data=val_dataset,
+            callbacks=[checkpoint_callback],
+        )
+        
+        model.save('./final_model.keras') 
 
-    model.fit(
-        train_dataset.take(5),
-        epochs=10,
-        validation_data=val_dataset.take(1),
-        callbacks=[checkpoint_callback],
-    )
-    
-    model.save('./final_model.keras') 
-
-    val_loss, val_acc = model.evaluate(val_dataset, verbose=2)
-    print(f"\nval accuracy: {val_acc}\nval loss: {val_loss}")
+        val_loss, val_acc = model.evaluate(val_dataset, verbose=2)
+        print(f"\nval accuracy: {val_acc}\nval loss: {val_loss}")
 
 
 if __name__ == "__main__":
